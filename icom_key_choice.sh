@@ -4,6 +4,9 @@
 
 RigCtl="rigctl -m 373 -r /dev/ttyUSBicom -s 19200"
 
+# skips first lookup so the key can be changed quicker
+SKIP_INITIAL_KEY_LOOKUP=1
+
 function get_cur_key() {
 	CurKeyResponseBinary=`${RigCtl} w '\0xFE\0xFE\0x94\0xE0\0x1A\0x05\0x01\0x64\0xFD'`
 	echo "CurKeyResponseBinary: ${CurKeyResponseBinary}"
@@ -35,6 +38,7 @@ function get_cur_key_with_progress() {
 function get_user_selection {
 	Chosen=$(zenity --info --title 'Choose your key type:' \
 	      --text "Currently: ${CurKey}" \
+	      --width=300 \
 	      --ok-label Straight \
 	      --extra-button Bug \
 	      --extra-button Paddle)
@@ -63,15 +67,25 @@ function get_user_selection {
 }
 
 function exec_update() {
-	${RigCtl} w ${CmdStr} |
-	zenity --progress \
-	  --title="Setting key type" \
-	  --text="Updating to ${Chosen}..." \
-	  --auto-close \
-	  --pulsate
+	RIGCTL_ERR=$((
+	  ${RigCtl} w ${CmdStr} |
+	    zenity --progress \
+	      --title="Setting key type" \
+	      --text="Updating to ${Chosen}..." \
+	      --auto-close \
+	      --pulsate
+	  ) 2>&1)
+	echo "rigctl error: ${RIGCTL_ERR}"
+	if [ -n "$RIGCTL_ERR" ]; then
+	  zenity --error \
+	    --width=300 \
+	    --height=100 \
+	    --text "Problem with rigctl command:\n${RIGCTL_ERR}"
+	fi
 }
 
 # skip getting the key the first time to go faster
+CurKey="(not yet queried)"
 get_user_selection
 exec_update
 while true; do
